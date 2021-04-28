@@ -1,15 +1,14 @@
 import asyncio
 import discord
+from dotenv import load_dotenv
 import logging
-import random
+import os
+from pathlib import Path
 import json
 import argparse
 from balance.team_balancer import get_player_members, get_player_names_rank, create_balance, create_bros_balance
 from balance.application import Application
 from balance.message_parser import MessageParser
-
-# Show debug messages
-logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
 
 # https://github.com/Rapptz/discord.py
 # https://discordpy.readthedocs.io/en/latest/index.html
@@ -19,21 +18,52 @@ logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
 #TODO Move rankings to a Google Sheet and allow users to dynamically upload or apply their own rankings
 #TODO When asking the bot to create teams, tell it who to include or who to exclude
 
+load_dotenv()
 # process parser
 parser = argparse.ArgumentParser()
-parser.add_argument("botkey", help="The discord bot key")
-parser.add_argument("rankings", help="The JSON file that holds rankings")
+parser.add_argument("--botkey", help="The discord bot key")
+parser.add_argument("--rankings", help="The directory that holds rankings")
+parser.add_argument("--verbose", action='store_true', help="Shows logging from Discord")
 args = parser.parse_args()
 
+# Show debug messages
+logging.basicConfig(encoding='utf-8', level=logging.DEBUG)
+if not args.verbose:
+    logging.getLogger("asyncio").setLevel(logging.CRITICAL + 1)
+    logging.getLogger("discord").setLevel(logging.CRITICAL + 1)
+
+
+rankings_directory = ""
 rankings = {} #example rankings file would be {"Khellendros": 3000, "ArrrrMatey": 2000, "Ashkon": 500}
 botkey = ""
+cwd = Path(__file__).parent # can't trust Path.cwd() if we are calling from another directory
 
-if (args.rankings):
-    with open(args.rankings) as json_file:
-        rankings = json.load(json_file)
-
-if (args.botkey):
+if args.botkey:
     botkey = args.botkey
+else:
+    botkey = os.environ.get('BALANCE_THE_FORCE_API_KEY')
+
+if not botkey:
+    exit(f"Discord Api Key Not Set\nPlease check {cwd / '.env'}")
+
+if args.rankings:
+    rankings_directory = Path(args.rankings)
+else:
+    env = os.environ.get('BALANCE_THE_FORCE_RANKINGS_DIRECTORY')
+    if env:
+        rankings_directory = Path(env)
+
+if not rankings_directory:
+    rankings_directory = cwd
+
+rankings_file_path = rankings_directory / "rankings.json"
+
+logging.info(f"Rankings file set to: '{rankings_file_path}'")
+if rankings_file_path.exists():
+    with open(rankings_file_path) as json_file:
+        rankings = json.load(json_file)
+else:
+    exit(f"No such ranking file '{rankings_file_path}'")
 
 intents = discord.Intents.all()
 client = discord.Client(intents=intents)

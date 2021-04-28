@@ -1,4 +1,5 @@
 .vscode/launch.json
 rankings.json
+.env
 
 __pycache__/
